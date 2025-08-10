@@ -4,3 +4,6 @@ uvicorn
 requests
 pydantic
 httpx
+fastmcp
+mcp
+asyncio
