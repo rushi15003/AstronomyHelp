@@ -1,6 +1,5 @@
 import asyncio
 import os
-import base64
 from typing import Annotated
 from dotenv import load_dotenv
 from fastmcp import FastMCP
@@ -66,10 +65,11 @@ async def validate() -> str:
 
 # ===== NASA Astronomy Tools =====
 async def fetch_apod(date: str = None) -> dict:
-    """Fetch Astronomy Picture of the Day (APOD) and include direct image URL for WhatsApp LLM"""
+    """Fetch Astronomy Picture of the Day with image URL"""
     url = f"https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}&thumbs=True"
     if date:
         url += f"&date={date}"
+    
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         if response.status_code != 200:
@@ -77,19 +77,22 @@ async def fetch_apod(date: str = None) -> dict:
                 code=INVALID_PARAMS,
                 message="Failed to fetch APOD data"
             ))
+        
         data = response.json()
-        # Always use standard image URL if media_type is "image"
-        image_url = data.get("url") if data.get("media_type") == "image" else None
-        # fallback to thumbnail if video
-        thumbnail_url = data.get("thumbnail_url") if data.get("media_type") == "video" else None
+        
+        # Determine the best image URL to use
+        image_url = data.get("hdurl", data.get("url"))
+        if data.get("media_type") == "video":
+            image_url = data.get("thumbnail_url")
+        
         return {
             "title": data.get("title", "Untitled"),
             "date": data.get("date"),
             "explanation": data.get("explanation"),
             "media_type": data.get("media_type"),
-            "image_url": image_url or thumbnail_url,  # Key for WhatsApp LLM bot
-            "caption": data.get("title", "NASA Astronomy Picture of the Day"),
-            "page_url": data.get("hdurl") or data.get("url"),  # for extra viewing
+            "url": image_url,  # Always return the best available image URL
+            "hdurl": data.get("hdurl"),  # Still include hdurl if available
+            "thumbnail": data.get("thumbnail_url"),  # For videos
         }
 
 
@@ -114,11 +117,11 @@ async def fetch_planet_info(planet: str) -> dict:
         }
 
 # ===== MCP Tools =====
-@mcp.tool(description="Get NASA Astronomy Picture of the Day (returns image URL for WhatsApp)")
+@mcp.tool(description="Get NASA Astronomy Picture of the Day with image URL")
 async def get_apod(
     date: Annotated[str, Field(description="Date in YYYY-MM-DD format (optional)")] = None
 ) -> dict:
-    """Returns today's astronomy picture with direct image URL for WhatsApp display"""
+    """Returns today's astronomy picture with its URL"""
     try:
         return await fetch_apod(date)
     except Exception as e:
@@ -126,7 +129,6 @@ async def get_apod(
             code=INTERNAL_ERROR,
             message=f"APOD fetch error: {str(e)}"
         ))
-
 
 
 @mcp.tool(description="Get planetary information")
