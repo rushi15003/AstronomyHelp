@@ -58,6 +58,10 @@ mcp = FastMCP(
     stateless_http=True
 )
 
+@mcp.tool
+async def about() -> dict:
+    return {"name": "AstroInfo", "description": "Our server is designed to give you the image of the day from NASA and also planetary facts"}
+
 # ===== validate tool =====
 @mcp.tool
 async def validate() -> str:
